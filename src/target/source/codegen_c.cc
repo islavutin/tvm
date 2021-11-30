@@ -351,7 +351,7 @@ std::string CodeGenC::CastFromTo(std::string value, DataType from, DataType targ
   return os.str();
 }
 
-void CodeGenC::BindThreadIndex(const IterVar& iv, int thread_extent) {
+void CodeGenC::BindThreadIndex(const IterVar& iv) {
     LOG(FATAL) << "not implemented";
 }
 
@@ -924,7 +924,7 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
     IterVar iv = Downcast<IterVar>(op->node);
     if (iv->thread_tag.length() != 0) {
       if (!var_idmap_.count(iv->var.get())) {
-        BindThreadIndex(iv, Downcast<IntImm>(op->value)->value);
+        BindThreadIndex(iv);
       }
     }
   } else if (op->attr_key == tir::attr::volatile_scope) {
