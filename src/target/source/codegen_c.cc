@@ -351,7 +351,9 @@ std::string CodeGenC::CastFromTo(std::string value, DataType from, DataType targ
   return os.str();
 }
 
-void CodeGenC::BindThreadIndex(const IterVar& iv) { LOG(FATAL) << "not implemented"; }
+void CodeGenC::BindThreadIndex(const IterVar& iv, int thread_extent) {
+    LOG(FATAL) << "not implemented";
+}
 
 void CodeGenC::PrintStorageSync(const CallNode* op) {  // NOLINT(*)
 }
@@ -498,6 +500,42 @@ inline void PrintBinaryExpr(const T* op, const char* opstr,
   }
 }
 
+template <typename T>
+inline void PrintBinaryExprCustomMod(const T* op, const char* opstr,
+                            std::ostream& os,  // NOLINT(*)
+                            CodeGenC* p) {
+    os << '(';
+    p->PrintExpr(op->a, os);
+    os << ' ' << "-" << ' ';
+    os << ' ' << "(int)" << ' ';
+    os << '(';
+    p->PrintExpr(op->b, os);
+    os << ' ' << "*" << ' ';
+    os << ' ' << "(float)" << ' ';
+    os << '(';
+    p->PrintExpr(op->a, os);
+    os << ' ' << "/" << ' ';
+    p->PrintExpr(op->b, os);
+    os << ')';
+    os << ')';
+    os << ')';
+}
+
+template <typename T>
+inline void PrintBinaryExprCustomDiv(const T* op, const char* opstr,
+                            std::ostream& os,  // NOLINT(*)
+                            CodeGenC* p) {
+    os << "(int)";
+    os << '(';
+    os << "(float)";
+    os << '(';
+    p->PrintExpr(op->a, os);
+    os << ' ' << "/" << ' ';
+    p->PrintExpr(op->b, os);
+    os << ')';
+    os << ')';
+}
+
 inline void PrintBinaryIntrinsic(const CallNode* op, const char* opstr,
                                  std::ostream& os,  // NOLINT(*)
                                  CodeGenC* p) {
@@ -512,6 +550,7 @@ inline void PrintBinaryIntrinsic(const CallNode* op, const char* opstr,
     p->PrintVecBinaryOp(opstr, op->dtype, op->args[0], op->args[1], os);
   }
 }
+
 void CodeGenC::VisitExpr_(const CastNode* op, std::ostream& os) {  // NOLINT(*)
   std::stringstream value;
   this->PrintExpr(op->value, value);
@@ -529,12 +568,16 @@ void CodeGenC::VisitExpr_(const SubNode* op, std::ostream& os) {  // NOLINT(*)
 void CodeGenC::VisitExpr_(const MulNode* op, std::ostream& os) {  // NOLINT(*)
   PrintBinaryExpr(op, "*", os, this);
 }
+
+
 void CodeGenC::VisitExpr_(const DivNode* op, std::ostream& os) {  // NOLINT(*)
-  PrintBinaryExpr(op, "/", os, this);
+  PrintBinaryExprCustomDiv(op, "/", os, this);
 }
+
 void CodeGenC::VisitExpr_(const ModNode* op, std::ostream& os) {  // NOLINT(*)
   if (op->dtype.is_int() || op->dtype.is_uint()) {
-    PrintBinaryExpr(op, "%", os, this);
+    PrintBinaryExprCustomMod(op, "%", os, this);
+
   } else {
     ICHECK(op->dtype.is_float()) << "Expected floating point or integer dtype in Mod, but got "
                                  << op->dtype;
@@ -881,7 +924,7 @@ void CodeGenC::VisitStmt_(const AttrStmtNode* op) {
     IterVar iv = Downcast<IterVar>(op->node);
     if (iv->thread_tag.length() != 0) {
       if (!var_idmap_.count(iv->var.get())) {
-        BindThreadIndex(iv);
+        BindThreadIndex(iv, Downcast<IntImm>(op->value)->value);
       }
     }
   } else if (op->attr_key == tir::attr::volatile_scope) {
